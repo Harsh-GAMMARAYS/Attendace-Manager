@@ -136,46 +136,81 @@ async function main() {
 
   // ATTENDANCE
   for (let i = 1; i <= 10; i++) {
-    await prisma.attendance.create({
-      data: {
+    const attendance = await prisma.attendance.upsert({
+      where: {
+        id: i
+      },
+      update: {
         uploadedAt: new Date(),
         lessonID: (i % 30) + 1,
         teacherID: `teacher${(i % 15) + 1}`,
-        records: {
-          create: [
-            {
-              studentID: `student${i}`,
-              status: i % 2 === 0 ? Status.PRESENT : Status.ABSENT,
-              attentiveness: i % 2 === 0 ? Math.floor(Math.random() * 101) : null,
-            },
-          ],
-        },
       },
+      create: {
+        id: i,
+        uploadedAt: new Date(),
+        lessonID: (i % 30) + 1,
+        teacherID: `teacher${(i % 15) + 1}`,
+      }
+    });
+
+    // Create attendance record
+    await prisma.attendanceRecord.upsert({
+      where: {
+        studentID: `student${i}`
+      },
+      update: {
+        attendanceID: attendance.id,
+        status: i % 2 === 0 ? Status.PRESENT : Status.ABSENT,
+        attentiveness: i % 2 === 0 ? Math.floor(Math.random() * 101) : null,
+      },
+      create: {
+        studentID: `student${i}`,
+        attendanceID: attendance.id,
+        status: i % 2 === 0 ? Status.PRESENT : Status.ABSENT,
+        attentiveness: i % 2 === 0 ? Math.floor(Math.random() * 101) : null,
+      }
     });
   }
 
   // EVENT
   for (let i = 1; i <= 5; i++) {
-    await prisma.event.create({
-      data: {
+    await prisma.event.upsert({
+      where: { id: i },
+      update: {
         title: `Event ${i}`,
         description: `Description for Event ${i}`,
         startDate: new Date(new Date().setHours(new Date().getHours() + 1)),
         endDate: new Date(new Date().setHours(new Date().getHours() + 2)),
         classID: (i % 5) + 1,
       },
+      create: {
+        id: i,
+        title: `Event ${i}`,
+        description: `Description for Event ${i}`,
+        startDate: new Date(new Date().setHours(new Date().getHours() + 1)),
+        endDate: new Date(new Date().setHours(new Date().getHours() + 2)),
+        classID: (i % 5) + 1,
+      }
     });
   }
 
   // ANNOUNCEMENT
   for (let i = 1; i <= 5; i++) {
-    await prisma.announcement.create({
-      data: {
+    await prisma.announcement.upsert({
+      where: { id: i },
+      update: {
         title: `Announcement ${i}`,
         description: `Description for Announcement ${i}`,
         date: new Date(),
         classID: (i % 5) + 1,
       },
+      create: {
+        id: i,
+        title: `Announcement ${i}`,
+        description: `Description for Announcement ${i}`,
+        date: new Date(),
+        classID: (i % 5) + 1,
+      }
     });
   }
 
