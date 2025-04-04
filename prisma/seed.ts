@@ -134,6 +134,25 @@ async function main() {
     });
   }
 
+  const classes = await prisma.class.findMany();
+
+  // Create lessons first
+  for (let i = 1; i <= 30; i++) {
+    await prisma.lesson.create({
+      data: {
+        name: `Lesson ${i}`,
+        day: Day.MONDAY,
+        startTime: new Date(),
+        endTime: new Date(new Date().getTime() + 60 * 60 * 1000), // 1 hour later
+        subjectID: subjects[i % subjects.length].id,
+        classID: classes[i % classes.length].id,
+        teacherID: teachers[i % teachers.length].id
+      }
+    });
+  }
+
+  const lessons = await prisma.lesson.findMany();
+
   // ATTENDANCE
   for (let i = 1; i <= 10; i++) {
     const attendance = await prisma.attendance.upsert({
@@ -142,34 +161,29 @@ async function main() {
       },
       update: {
         uploadedAt: new Date(),
-        lessonID: (i % 30) + 1,
-        teacherID: `teacher${(i % 15) + 1}`,
+        lessonID: lessons[i % lessons.length].id,
+        teacherID: teachers[i % teachers.length].id,
       },
       create: {
         id: i,
         uploadedAt: new Date(),
-        lessonID: (i % 30) + 1,
-        teacherID: `teacher${(i % 15) + 1}`,
+        lessonID: lessons[i % lessons.length].id,
+        teacherID: teachers[i % teachers.length].id,
       }
     });
 
-    // Create attendance record
-    await prisma.attendanceRecord.upsert({
-      where: {
-        studentID: `student${i}`
-      },
-      update: {
-        attendanceID: attendance.id,
-        status: i % 2 === 0 ? Status.PRESENT : Status.ABSENT,
-        attentiveness: i % 2 === 0 ? Math.floor(Math.random() * 101) : null,
-      },
-      create: {
-        studentID: `student${i}`,
-        attendanceID: attendance.id,
-        status: i % 2 === 0 ? Status.PRESENT : Status.ABSENT,
-        attentiveness: i % 2 === 0 ? Math.floor(Math.random() * 101) : null,
-      }
-    });
+    // Create attendance records for multiple students
+    for (let j = 1; j <= 5; j++) {
+      const studentId = `student${(i + j) % 50 + 1}`; // Cycle through students
+      await prisma.attendanceRecord.create({
+        data: {
+          studentID: studentId,
+          attendanceID: attendance.id,
+          status: j % 2 === 0 ? Status.PRESENT : Status.ABSENT,
+          attentiveness: j % 2 === 0 ? Math.floor(Math.random() * 101) : null,
+        }
+      });
+    }
   }
 
   // EVENT

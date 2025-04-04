@@ -22,10 +22,6 @@ const Attendance = () => {
   const [error, setError] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>("");
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-  });
 
   // Get unique classes from the data
   const classes = Array.from(
@@ -34,31 +30,39 @@ const Attendance = () => {
 
   useEffect(() => {
     fetchAttendanceData();
-  }, [dateRange]);
+  }, []);
 
   const fetchAttendanceData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const queryParams = new URLSearchParams();
-      queryParams.append('startDate', dateRange.startDate);
-      queryParams.append('endDate', dateRange.endDate);
-
-      const response = await fetch(`/api/attendance?${queryParams.toString()}`);
+      
+      console.log('Fetching attendance data...');
+      
+      const response = await fetch('/api/attendance');
       
       if (!response.ok) {
-        throw new Error('Failed to fetch attendance data');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch attendance data');
       }
 
       const data = await response.json();
+      console.log('Received attendance data:', data);
+      
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid data format received from server');
+      }
+
       setAttendanceData(data);
+      
       // Set the first class as default if available
       if (data.length > 0 && !selectedClass) {
         setSelectedClass(data[0].student.class.name);
       }
     } catch (err) {
-      setError("Failed to fetch attendance data");
-      console.error(err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch attendance data';
+      setError(errorMessage);
+      console.error('Error fetching attendance:', err);
     } finally {
       setLoading(false);
     }
@@ -68,6 +72,19 @@ const Attendance = () => {
   const filteredData = attendanceData.filter(
     (record) => record.student.class.name === selectedClass
   );
+
+  // Group records by student
+  const groupedByStudent = filteredData.reduce((acc, record) => {
+    const studentId = record.studentID;
+    if (!acc[studentId]) {
+      acc[studentId] = {
+        student: record.student,
+        records: []
+      };
+    }
+    acc[studentId].records.push(record);
+    return acc;
+  }, {} as Record<string, { student: AttendanceRecord['student']; records: AttendanceRecord[] }>);
 
   const getStatusClass = (status: string) =>
     status === "PRESENT" ? "text-green-600 font-semibold" : "text-red-600 font-semibold";
@@ -86,30 +103,26 @@ const Attendance = () => {
     return (
       <div className="p-4 bg-white rounded-md shadow-md">
         <div className="text-red-600 text-center">{error}</div>
+        <button 
+          onClick={fetchAttendanceData}
+          className="mt-4 px-4 py-2 bg-lamaPurple text-white rounded-md hover:bg-lamaPurpleLight transition duration-200"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (attendanceData.length === 0) {
+    return (
+      <div className="p-4 bg-white rounded-md shadow-md">
+        <div className="text-center text-gray-500">No attendance records found.</div>
       </div>
     );
   }
 
   return (
     <div className="p-4 bg-white rounded-md shadow-md">
-      {/* Date Range Selection */}
-      <div className="mb-4 flex gap-4 items-center">
-        <div className="flex gap-2">
-          <input
-            type="date"
-            value={dateRange.startDate}
-            onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-            className="px-3 py-2 border rounded-md"
-          />
-          <input
-            type="date"
-            value={dateRange.endDate}
-            onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-            className="px-3 py-2 border rounded-md"
-          />
-        </div>
-      </div>
-
       {/* Class Selection Buttons */}
       <div className="mb-4 flex gap-2 flex-wrap">
         {classes.map((className) => (
@@ -138,32 +151,39 @@ const Attendance = () => {
           <thead>
             <tr className="bg-gray-100">
               <th className="border border-gray-300 px-4 py-2 text-left">Student Name</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">Class</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">Date</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">Status</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">Attentiveness</th>
+              <th className="border border-gray-300 px-4 py-2 text-left">Total Records</th>
+              <th className="border border-gray-300 px-4 py-2 text-left">Present</th>
+              <th className="border border-gray-300 px-4 py-2 text-left">Absent</th>
+              <th className="border border-gray-300 px-4 py-2 text-left">Average Attentiveness</th>
             </tr>
           </thead>
           <tbody>
-            {filteredData.map((record) => (
-              <tr key={record.id} className="hover:bg-gray-50">
-                <td className="border border-gray-300 px-4 py-2">
-                  {record.student.name} {record.student.surname || ''}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {record.student.class.name}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {new Date(record.attendance.uploadedAt).toLocaleDateString()}
-                </td>
-                <td className={`border border-gray-300 px-4 py-2 ${getStatusClass(record.status)}`}>
-                  {record.status}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {record.attentiveness ? `${record.attentiveness}%` : "N/A"}
-                </td>
-              </tr>
-            ))}
+            {Object.entries(groupedByStudent).map(([studentId, { student, records }]) => {
+              const presentCount = records.filter(r => r.status === "PRESENT").length;
+              const absentCount = records.filter(r => r.status === "ABSENT").length;
+              const totalAttentiveness = records.reduce((sum, r) => sum + (r.attentiveness || 0), 0);
+              const averageAttentiveness = records.length > 0 ? Math.round(totalAttentiveness / records.length) : 0;
+
+              return (
+                <tr key={studentId} className="hover:bg-gray-50">
+                  <td className="border border-gray-300 px-4 py-2">
+                    {student.name} {student.surname || ''}
+                  </td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    {records.length}
+                  </td>
+                  <td className="border border-gray-300 px-4 py-2 text-green-600">
+                    {presentCount}
+                  </td>
+                  <td className="border border-gray-300 px-4 py-2 text-red-600">
+                    {absentCount}
+                  </td>
+                  <td className="border border-gray-300 px-4 py-2">
+                    {averageAttentiveness}%
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -173,18 +193,16 @@ const Attendance = () => {
         <div className="mt-4 grid grid-cols-3 gap-4">
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="font-semibold">Total Students</h3>
+            <p className="text-2xl">{Object.keys(groupedByStudent).length}</p>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-md">
+            <h3 className="font-semibold">Total Records</h3>
             <p className="text-2xl">{filteredData.length}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
-            <h3 className="font-semibold">Present</h3>
-            <p className="text-2xl text-green-600">
-              {filteredData.filter((record) => record.status === "PRESENT").length}
-            </p>
-          </div>
-          <div className="bg-gray-50 p-4 rounded-md">
-            <h3 className="font-semibold">Absent</h3>
-            <p className="text-2xl text-red-600">
-              {filteredData.filter((record) => record.status === "ABSENT").length}
+            <h3 className="font-semibold">Average Attentiveness</h3>
+            <p className="text-2xl">
+              {Math.round(filteredData.reduce((sum, r) => sum + (r.attentiveness || 0), 0) / filteredData.length)}%
             </p>
           </div>
         </div>

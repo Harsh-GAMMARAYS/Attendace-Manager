@@ -7,42 +7,16 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    console.log('Fetching attendance records with params:', { startDate, endDate });
+    console.log('Fetching all attendance records...');
 
     const attendanceRecords = await prisma.attendanceRecord.findMany({
-      where: {
-        attendance: {
-          uploadedAt: {
-            gte: startDate ? new Date(startDate) : undefined,
-            lte: endDate ? new Date(endDate) : undefined,
-          },
-        },
-      },
-      select: {
-        id: true,
-        studentID: true,
-        status: true,
-        attentiveness: true,
+      include: {
         student: {
-          select: {
-            name: true,
-            surname: true,
-            class: {
-              select: {
-                name: true,
-              },
-            },
-          },
+          include: {
+            class: true
+          }
         },
-        attendance: {
-          select: {
-            uploadedAt: true,
-          },
-        },
+        attendance: true
       },
       orderBy: {
         attendance: {
@@ -52,6 +26,7 @@ export async function GET(request: Request) {
     });
 
     console.log('Found attendance records:', attendanceRecords.length);
+    console.log('First record sample:', JSON.stringify(attendanceRecords[0], null, 2));
 
     return NextResponse.json(attendanceRecords);
   } catch (error) {
