@@ -6,19 +6,29 @@ async function main() {
   console.log("🌱 Seeding database...");
 
   // ADMIN
-  await prisma.admin.createMany({
-    data: [
-      { id: "admin1", username: "harshit" },
-      { id: "admin2", username: "manodeep" }
-    ],
-  });
+  await Promise.all([
+    prisma.admin.upsert({
+      where: { id: "admin1" },
+      update: {},
+      create: { id: "admin1", username: "harshit" }
+    }),
+    prisma.admin.upsert({
+      where: { id: "admin2" },
+      update: {},
+      create: { id: "admin2", username: "manodeep" }
+    })
+  ]);
 
   // GRADE
-  await prisma.grade.createMany({
-    data: Array.from({ length: 10 }, (_, i) => ({ level: i + 1 })),
-  });
+  for (let i = 1; i <= 10; i++) {
+    await prisma.grade.upsert({
+      where: { level: i },
+      update: {},
+      create: { level: i }
+    });
+  }
 
-  // SUBJECT (Created before assigning to teachers)
+  // SUBJECT
   const subjectData = [
     { name: "Computer Networks" },
     { name: "VLSI" },
@@ -29,89 +39,100 @@ async function main() {
     { name: "CN LAB" },
     { name: "VLSI LAB" },
   ];
-  await prisma.subject.createMany({ data: subjectData });
+
+  for (const subject of subjectData) {
+    await prisma.subject.upsert({
+      where: { name: subject.name },
+      update: {},
+      create: subject
+    });
+  }
 
   // Fetch subjects after creation
   const subjects = await prisma.subject.findMany();
 
-  // TEACHER (Now correctly assigned subjects)
-  const teachers = await Promise.all(
-    Array.from({ length: 15 }, async (_, i) =>
-      prisma.teacher.create({
-        data: {
-          id: `teacher${i + 1}`,
-          username: `teacher${i + 1}`,
-          name: `TName${i + 1}`,
-          surname: `TSurname${i + 1}`,
-          email: `teacher${i + 1}@example.com`,
-          phone: `123-456-789${i + 1}`,
-          address: `Address${i + 1}`,
-          bloodType: "A+",
-          sex: i % 2 === 0 ? UserSex.MALE : UserSex.FEMALE,
-          birthday: new Date(Date.now() - 30 * 365 * 24 * 60 * 60 * 1000),
-          subjects: { connect: [{ id: subjects[i % subjects.length].id }] }, // Now subjects exist!
-        },
-      })
-    )
-  );
+  // TEACHER
+  for (let i = 1; i <= 15; i++) {
+    await prisma.teacher.upsert({
+      where: { id: `teacher${i}` },
+      update: {
+        subjects: { connect: [{ id: subjects[i % subjects.length].id }] }
+      },
+      create: {
+        id: `teacher${i}`,
+        username: `teacher${i}`,
+        name: `TName${i}`,
+        surname: `TSurname${i}`,
+        email: `teacher${i}@example.com`,
+        phone: `123-456-789${i}`,
+        address: `Address${i}`,
+        bloodType: "A+",
+        sex: i % 2 === 0 ? UserSex.MALE : UserSex.FEMALE,
+        birthday: new Date(Date.now() - 30 * 365 * 24 * 60 * 60 * 1000),
+        subjects: { connect: [{ id: subjects[i % subjects.length].id }] }
+      }
+    });
+  }
 
-  // CLASS (Assigned valid supervisors)
-  await prisma.class.createMany({
-    data: Array.from({ length: 6 }, (_, i) => ({
-      name: `${i + 1}A`,
-      gradeID: i + 1,
-      capacity: Math.floor(Math.random() * 6) + 15,
-      supervisorID: teachers[i]?.id ?? null, // Ensuring valid teacher assignment
-    })),
-  });
+  const teachers = await prisma.teacher.findMany();
 
-  // LESSON
-  await prisma.lesson.createMany({
-    data: Array.from({ length: 30 }, (_, i) => ({
-      name: `Lesson${i + 1}`,
-      day: Object.values(Day)[i % Object.keys(Day).length], // Random day
-      startTime: new Date(Date.now() + 3600000), // 1 hour later
-      endTime: new Date(Date.now() + 10800000), // 3 hours later
-      subjectID: subjects[i % subjects.length].id, // Ensure subject exists
-      classID: (i % 6) + 1,
-      teacherID: teachers[i % teachers.length]?.id ?? null, // Ensure valid teacher
-    })),
-  });
+  // CLASS
+  for (let i = 1; i <= 6; i++) {
+    await prisma.class.upsert({
+      where: { name: `${i}A` },
+      update: {
+        supervisorID: teachers[i - 1]?.id ?? null
+      },
+      create: {
+        name: `${i}A`,
+        gradeID: i,
+        capacity: Math.floor(Math.random() * 6) + 15,
+        supervisorID: teachers[i - 1]?.id ?? null
+      }
+    });
+  }
 
   // PARENT
-  await prisma.parent.createMany({
-    data: Array.from({ length: 25 }, (_, i) => ({
-      id: `parentId${i + 1}`,
-      username: `parentId${i + 1}`,
-      name: `PName ${i + 1}`,
-      surname: `PSurname ${i + 1}`,
-      email: `parent${i + 1}@example.com`,
-      phone: `+91-1234567898${i + 1}`,
-      address: `Address${i + 1}`,
-    })),
-  });
+  for (let i = 1; i <= 25; i++) {
+    await prisma.parent.upsert({
+      where: { id: `parentId${i}` },
+      update: {},
+      create: {
+        id: `parentId${i}`,
+        username: `parentId${i}`,
+        name: `PName ${i}`,
+        surname: `PSurname ${i}`,
+        email: `parent${i}@example.com`,
+        phone: `+91-1234567898${i}`,
+        address: `Address${i}`
+      }
+    });
+  }
 
+  const parents = await prisma.parent.findMany();
 
-  const existingParents = await prisma.parent.findMany({ select: { id: true } });
-  const parentIds = existingParents.map(p => p.id);
   // STUDENT
-  await prisma.student.createMany({
-    data: Array.from({ length: 50 }, (_, i) => ({
-      id: `student${i + 1}`,
-      username: `student${i + 1}`,
-      name: `SName${i + 1}`,
-      surname: `SSurname ${i + 1}`,
-      email: `student${i + 1}@example.com`,
-      phone: `+91-1234567898${i + 1}`,
-      address: `Address${i + 1}`,
-      bloodType: "O-",
-      sex: i % 2 === 0 ? UserSex.MALE : UserSex.FEMALE,
-      parentID: parentIds[i % parentIds.length], // ✅ Ensure parent exists
-      gradeID: (i % 6) + 1,
-      classID: (i % 6) + 1,
-      birthday: new Date(Date.now() - 10 * 365 * 24 * 60 * 60 * 1000),
-    })),
-  });
+  for (let i = 1; i <= 50; i++) {
+    await prisma.student.upsert({
+      where: { id: `student${i}` },
+      update: {},
+      create: {
+        id: `student${i}`,
+        username: `student${i}`,
+        name: `SName${i}`,
+        surname: `SSurname ${i}`,
+        email: `student${i}@example.com`,
+        phone: `+91-1234567898${i}`,
+        address: `Address${i}`,
+        bloodType: "O-",
+        sex: i % 2 === 0 ? UserSex.MALE : UserSex.FEMALE,
+        parentID: parents[i % parents.length].id,
+        gradeID: (i % 6) + 1,
+        classID: (i % 6) + 1,
+        birthday: new Date(Date.now() - 10 * 365 * 24 * 60 * 60 * 1000)
+      }
+    });
+  }
 
   // ATTENDANCE
   for (let i = 1; i <= 10; i++) {
