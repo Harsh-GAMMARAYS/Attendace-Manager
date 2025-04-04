@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 
 // Prevent build-time data fetching
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+
+    console.log('Fetching attendance records with params:', { startDate, endDate });
 
     const attendanceRecords = await prisma.attendanceRecord.findMany({
       where: {
@@ -51,14 +51,18 @@ export async function GET(request: Request) {
       },
     });
 
+    console.log('Found attendance records:', attendanceRecords.length);
+
     return NextResponse.json(attendanceRecords);
   } catch (error) {
-    console.error('Error fetching attendance:', error);
+    console.error('Detailed error fetching attendance:', {
+      error,
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch attendance data' },
+      { error: 'Failed to fetch attendance data', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 } 
