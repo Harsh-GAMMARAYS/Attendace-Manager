@@ -9,6 +9,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { Subjects } from "react-hook-form";
 
+// Prevent build-time data fetching
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 type TeacherList = Teacher & {subjects: Subject[]} & {classes: Class[]};
 
 const columns = [
@@ -66,8 +70,12 @@ const renderRow = (item: TeacherList) => (
       </div>
     </td>
     <td className="hidden md:table-cell">{item.username}</td>
-    <td className="hidden md:table-cell">{item.subjects.join(",")}</td>
-    <td className="hidden md:table-cell">{item.classes.join(",")}</td>
+    <td className="hidden md:table-cell">
+      {item.subjects.map((subject) => subject.name).join(", ")}
+    </td>
+    <td className="hidden md:table-cell">
+      {item.classes.map((cls) => cls.name).join(", ")}
+    </td>
     <td className="hidden md:table-cell">{item.phone}</td>
     <td className="hidden md:table-cell">{item.address}</td>
     <td>
